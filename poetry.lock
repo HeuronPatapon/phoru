@@ -1,0 +1,18 @@
+[[package]]
+name = "ezre-HeuronPatapon"
+version = "1.2.0"
+description = "Wrapper around the `re` module for easier management of regular expressions"
+category = "main"
+optional = false
+python-versions = ">=3.10"
+
+[package.source]
+type = "url"
+url = "https://github.com/HeuronPatapon/ezre/releases/download/1.2.0/ezre_HeuronPatapon-1.2.0-py3-none-any.whl"
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.10"
+content-hash = "9b46d098d8c3e1b78b23d40d605ed7254f9d18d99e28f7c5aa2784fddb1e34f8"
+
+[metadata.files]
+ezre-HeuronPatapon = []

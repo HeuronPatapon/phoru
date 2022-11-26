@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "phoru"
+version = "0.1.0"
+description = "Phonological rule processing as a domain specific language (DSL)."
+authors = ["Heuron <heuron-patapon@laposte.net>"]
+packages = [
+    { include = "hpat/phoru", from = "src" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+ezre-heuronpatapon = {url = "https://github.com/HeuronPatapon/ezre/releases/download/1.2.0/ezre_HeuronPatapon-1.2.0-py3-none-any.whl"}
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
