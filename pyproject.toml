@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "phoru"
 version = "0.1.0"
-description = "Phonological rule processing as a domain specific language (DSL)."
+description = "Phonological rule processing."
 authors = ["Heuron <heuron-patapon@laposte.net>"]
 packages = [
     { include = "hpat/phoru", from = "src" },
