@@ -94,6 +94,33 @@ class TestJQConversion(unittest.TestCase):
         output = program.input("karp").first()
         self.assertEqual(output, "krop")
 
+    def test_word_boundary(self):
+        rule = Rule(source=r"(a|e)", target="{-_}o", prefix="#")
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            'gsub("(?<prefix>#)(?<source>(a|e))(?<suffix>)"; "\\(.prefix)o\\(.suffix)")'
+        ))
+        program = jq.compile(text)
+        output = program.input("#arp#").first()
+        self.assertEqual(output, "#orp#")
+
+    def test_back_references(self):
+        rule = Rule(source=r"(?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel)", target="o{+consonant}o{-_}")
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            'gsub("(?<prefix>)(?<vowel>(a|e))(?<consonant>(k|p))\\\\k<vowel>(?<suffix>)"; "\\(.prefix)o\\(.consonant)o\\(.suffix)")'
+        ))
+        program = jq.compile(text)
+        expect_map = dict(
+            akap="okop",
+            ekep="okop",
+            akep="akep",
+        )
+        for key, expected in expect_map.items():
+            with self.subTest(key=key):
+                output = program.input(key).first()
+                self.assertEqual(output, expected)
+
 
 if __name__ == '__main__':
     unittest.main()

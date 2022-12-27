@@ -20,10 +20,9 @@ class Rule:
     """
     Examples
     --------
-    ~~~python
 
-    # Basic substitutions
-    # -------------------
+    Basic substitutions
+    ~~~~~~~~~~~~~~~~~~~
     >>> r = Rule(source="aa", target="cde")
     >>> r.pattern
     re.compile('(?P<prefix>)(?P<source>aa)(?P<suffix>)')
@@ -34,8 +33,8 @@ class Rule:
     >>> r("abaaf")
     'abcdef'
 
-    # Contextual substitutions
-    # ------------------------
+    Contextual substitutions
+    ~~~~~~~~~~~~~~~~~~~~~~~~
     >>> r = Rule(source="a", target="e", suffix="c")
     >>> r.pattern
     re.compile('(?P<prefix>)(?P<source>a)(?P<suffix>c)')
@@ -56,8 +55,8 @@ class Rule:
     >>> r("abaac")
     'abeac'
 
-    # Keeping references
-    # ------------------
+    Keeping references
+    ~~~~~~~~~~~~~~~~~~
     >>> r = Rule(source=r"(a|e)", target="{_}r", suffix=r"(k|p)")
     >>> r.pattern
     re.compile('(?P<prefix>)(?P<source>(a|e))(?P<suffix>(k|p))')
@@ -78,8 +77,8 @@ class Rule:
     >>> r("krap")
     'karp'
 
-    # Custom references
-    # -----------------
+    Custom references
+    ~~~~~~~~~~~~~~~~~
     >>> r = Rule(source=r"(a|e)", target="{+rhotic}{_}{-rhotic}", suffix=r"(?P<rhotic>(r|l))(?P<consonant>(k|p))")
     >>> r.pattern
     re.compile('(?P<prefix>)(?P<source>(a|e))(?P<rhotic>(r|l))(?P<consonant>(k|p))')
@@ -90,8 +89,8 @@ class Rule:
     >>> r("karp")
     'krap'
 
-    # Other source manipulations
-    # --------------------------
+    Other source manipulations
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~
     >>> r = Rule(source=r"(a|e)", target="{+_}{+rhotic}{_}{-rhotic}", suffix=r"(?P<rhotic>(r|l))(?P<consonant>(k|p))")
     >>> r.pattern
     re.compile('(?P<prefix>)(?P<source>(a|e))(?P<rhotic>(r|l))(?P<consonant>(k|p))')
@@ -112,7 +111,29 @@ class Rule:
     >>> r("karp")
     'krop'
 
-    ~~~
+    Word boundary
+    ~~~~~~~~~~~~~
+    >>> r = Rule(source=r"(a|e)", target="{-_}o", prefix="#")
+    >>> r.pattern
+    re.compile('(?P<prefix>#)(?P<source>(a|e))(?P<suffix>)')
+    >>> r.replacement
+    '\\\\g<prefix>o\\\\g<suffix>'
+    >>> r
+    <Rule (a|e) := {-_}o | # _ >
+    >>> r("#arp#")
+    '#orp#'
+
+    Back references
+    ~~~~~~~~~~~~~~~
+    >>> r = Rule(source=r"(?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel)", target="o{+consonant}o{-_}")
+    >>> r.pattern
+    re.compile('(?P<prefix>)(?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel)(?P<suffix>)')
+    >>> r.replacement
+    '\\\\g<prefix>o\\\\g<consonant>o\\\\g<suffix>'
+    >>> r
+    <Rule (?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel) := o{+consonant}o{-_}>
+    >>> r("akap"), r("ekep"), r("akep")
+    ('okop', 'okop', 'akep')
     """
     class MiniLanguage(string.Formatter):
         KEY = r"(?P<sign>(\+|-))(?P<group>\w+)"
@@ -232,8 +253,12 @@ class Rule:
         else:
             suffix_pattern = self.suffix
 
-        # TODO: support for source groups?
-        source_pattern = self.source.group("source")
+        # Note. support for source groups (expected to be declared and managed by the user):
+        source_groups: List[str] = list(self.source.compiled.groupindex.keys())
+        if not source_groups:
+            source_pattern = self.source.group("source")
+        else:
+            source_pattern = self.source
 
         pattern: Ezre = prefix_pattern + source_pattern + suffix_pattern
         return pattern.compiled
@@ -283,6 +308,6 @@ class _to_jq:
             raise NotImplementedError(f"cannot escape {replacement=!r}")
 
         regex = cls.GROUP.sub(r"(?<\g<name>>\g<pattern>)", regex)
-        regex = cls.BACKREF.sub(r"\\k<\g<name>>", regex)
+        regex = cls.BACKREF.sub(r"\\\\k<\g<name>>", regex)
         replacement = cls.REPLREF.sub(r"\(.\g<name>)", replacement)
         return f'gsub("{regex!s}"; "{replacement!s}")'
