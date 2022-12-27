@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "phoru-HeuronPatapon"
-version = "0.2.0"
+version = "0.3.0"
 description = "Phonological rule processing."
 authors = ["Heuron <heuron-patapon@laposte.net>"]
 packages = [
@@ -9,9 +9,12 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-ezre-heuronpatapon = {url = "https://github.com/HeuronPatapon/ezre/releases/download/1.2.0/ezre_HeuronPatapon-1.2.0-py3-none-any.whl"}
+ezre_heuronpatapon = {url = "https://github.com/HeuronPatapon/ezre/releases/download/1.3.1/ezre_heuronpatapon-1.3.1-py3-none-any.whl"}
 
 [tool.poetry.dev-dependencies]
+
+[tool.poetry.group.dev.dependencies]
+jq = "^1.3.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

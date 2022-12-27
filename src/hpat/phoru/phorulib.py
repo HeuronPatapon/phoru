@@ -217,7 +217,7 @@ class Rule:
             suffix_groups=suffix_groups)
         return formatter.format(self.target)
 
-    def get_pattern(self) -> str:
+    def get_pattern(self) -> re.Pattern:
         # Note. this part avoid creating groups on top of existing ones
         # and assumes that 'pattern' results in a sequence of non-nested groups. 
         prefix_groups: List[str] = list(self.prefix.compiled.groupindex.keys())
@@ -248,3 +248,41 @@ class Rule:
 
     def __call__(self, string: str, **kwargs):
         return re.sub(self.pattern, self.replacement, string, **kwargs)
+
+    def to_jq(self) -> str:
+        """
+        Convert this rule as a JQ program. 
+
+        Description
+        -----------
+        - convert '(?P<name>...)' into '(?<name>...)'
+        - convert '(?P=name)' into '\\k<name>'
+        - convert '\\g<name>' into '\\k<name>'
+
+        References
+        ----------
+        - https://stedolan.github.io/jq/manual/#RegularexpressionsPCRE
+        - https://www.pcre.org/original/doc/html/pcresyntax.html
+        """
+        return _to_jq(self)
+
+
+class _to_jq:
+    # Note. use of non-greedy capture for 'GROUP', to cope with parentheses:
+    GROUP = re.compile(r"\(\?P<(?P<name>\w+)>(?P<pattern>.*?)\)")
+    BACKREF = re.compile(r"\(\?P=(?P<name>\w+)\)")
+    REPLREF = re.compile(r"\\g<(?P<name>\w+)>")
+
+    def __new__(cls, rule: Rule) -> str:
+        regex: str = rule.pattern.pattern
+        replacement: str = rule.replacement
+        # TODO: proper escaping
+        if '"' in regex:
+            raise NotImplementedError(f"cannot escape {regex=!r}")
+        if '"' in replacement:
+            raise NotImplementedError(f"cannot escape {replacement=!r}")
+
+        regex = cls.GROUP.sub(r"(?<\g<name>>\g<pattern>)", regex)
+        regex = cls.BACKREF.sub(r"\\k<\g<name>>", regex)
+        replacement = cls.REPLREF.sub(r"\(.\g<name>)", replacement)
+        return f'gsub("{regex!s}"; "{replacement!s}")'
