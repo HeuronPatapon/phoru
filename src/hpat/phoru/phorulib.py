@@ -8,6 +8,7 @@ import doctest
 import string
 import functools
 from collections import defaultdict
+import json
 
 
 from hpat.ezre import Ezre
@@ -19,6 +20,11 @@ __all__ = ("Rule",)
 def load_tests(loader, tests, ignore):
     tests.addTests(doctest.DocTestSuite(__name__))
     return tests
+
+
+GroupName = NewType("GroupName", str)
+MappingName = NewType("MappingName", str)
+UserMapping = NewType("UserMapping", Dict[Union[GroupName, Tuple[GroupName]], str])
 
 
 class Rule:
@@ -59,6 +65,8 @@ class Rule:
 
     maps
         Placeholder for declaring custom mappings with user-supplied names, related to the `target` parameter. 
+
+        Mappings represent deterministic transformations of a sound into another, potentially based on other sounds in the current context. 
 
         See Examples below for more information. 
 
@@ -189,7 +197,7 @@ class Rule:
     ~~~~~~~~~~~~~
     Use the character '#' to represent a word boundary, instead of regular expression characters '^' and '$':
 
-        >>> r = Rule(source=r"(a|e)", target="{-_}o", prefix="#")
+        >>> r = Rule(source=r"(a|e)", target="{-_}o", prefix=r"#")
         >>> r.pattern
         re.compile('(?P<prefix>#)(?P<source>(a|e))(?P<suffix>)')
         >>> r.replacement
@@ -215,9 +223,9 @@ class Rule:
 
     Same transformation, different model:
 
-        >>> r = Rule(source=r"(?P<vowel>(a|e))", target="{-_}o{+consonant}{-vowel}o{-consonant}", suffix="(?P<consonant>(k|p))(?P=vowel)")
+        >>> r = Rule(source=r"(?P<vowel>(a|e))", target="{-_}o{+consonant}{-vowel}o{-consonant}", suffix=r"(?P<consonant>(k|p))(?P=vowel)")
         >>> r.pattern
-        re.compile('(?P<prefix>)(?P<vowel>(a|e))(?P<suffix>(?P<consonant>(k|p))(?P=vowel))')
+        re.compile('(?P<prefix>)(?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel)')
         >>> r.replacement
         '\\\\g<prefix>o\\\\g<consonant>o'
         >>> repr(r)
@@ -309,13 +317,17 @@ class Rule:
             | '{' MAP_NAME '[' GROUP_NAME [[',' GROUP_NAME] ...] ']' '}'
 
         STR
-            Any sequence of characters
+            Any sequence of characters. 
 
         MAP_NAME
             Name of a user-supplied mapping, same name as in rule's maps. 
 
+            The MAP_NAME is followed by the names of the groups to be used as arguments of the mapping call. 
+
         GROUP_NAME
             Name of a group, same as in rule's source, prefix or suffix. 
+
+            Users can define their own groups. 
 
         '{_}'
             Indicates the position of the rule's source. 
@@ -359,10 +371,11 @@ class Rule:
                 self,
                 prefix_groups: Sequence[str],
                 suffix_groups: Sequence[str],
-                maps: Dict[str, Dict[str, str]]):
+                maps: Dict[MappingName, UserMapping]):
             # Note. prefix_groups and suffix_groups are presumed to not contain any duplicate values. 
-            self.prefix_groups = prefix_groups
-            self.suffix_groups = suffix_groups
+            # CAUTION. prefix_groups and suffix_groups will be modified, so we make a copy:
+            self.prefix_groups = list(prefix_groups)
+            self.suffix_groups = list(suffix_groups)
             self.source_seen = False
             self.maps = maps
             self.map_calls: Set[Tuple[str]] = set()
@@ -411,6 +424,7 @@ class Rule:
                     else:
                         sequence = self.suffix_groups
                     index = sequence.index(group)
+                    # CAUTION. modify prefix_groups, suffix_groups:
                     sequence.pop(index)
                     return str()
 
@@ -440,7 +454,7 @@ class Rule:
             prefix: Optional[Union[str, Ezre]]=None,
             count: int=0,
             flags: int=0,
-            maps: Optional[Dict[str, Dict[str, str]]]=None,
+            maps: Optional[Dict[MappingName, UserMapping]]=None,
         ):
         # typing:
         if isinstance(source, str):
@@ -589,6 +603,7 @@ class Rule:
         - convert '(?P<name>...)' into '(?<name>...)'
         - convert '(?P=name)' into '\\k<name>'
         - convert '\\g<name>' into '\\k<name>'
+        - support for custom mappings
 
         References
         ----------
@@ -603,18 +618,64 @@ class _to_jq:
     GROUP = re.compile(r"\(\?P<(?P<name>\w+)>(?P<pattern>.*?)\)")
     BACKREF = re.compile(r"\(\?P=(?P<name>\w+)\)")
     REPLREF = re.compile(r"\\g<(?P<name>\w+)>")
+    MAP_CALL = re.compile(
+        r"{"
+        # Note.  this part is the same as Rule.MiniLanguage.MAP_CALL:
+        r"(?P<map_name>\w+)\[(?P<groups>\w+(,\w+)*)\]"
+        "}"
+    )
+
+    @classmethod
+    def replace_map_call(cls, match) -> str:
+        map_name, groups = match.group("map_name", "groups")
+        groups = groups.split(",")
+        groups = "".join([f"[.{group}]" for group in groups])
+        # Note. use an extra variable in jq for holding the mapping elsewhere:
+        return match.expand(fr"\($\g<map_name>{groups})").format(groups=groups)
+
+    @classmethod
+    def normalize_mapping(cls, mapping: UserMapping):
+        """
+        Convert user-supplied mapping into a structure compatible with JSON. 
+        """
+        result = dict()
+        for key, value in mapping.items():
+            *subkeys, last_key = key
+            subdict = result
+            for subkey in subkeys:
+                subdict = subdict.setdefault(subkey, dict())
+            subdict[last_key] = value
+
+        return result
 
     def __new__(cls, rule: Rule) -> str:
         regex: str = rule.pattern.pattern
         replacement: str = rule.replacement
+        count: int = rule.count
+        flags: int = rule.flags
         # TODO: proper escaping
         # TODO: support for count and flags
         if '"' in regex:
             raise NotImplementedError(f"cannot escape {regex=!r}")
         if '"' in replacement:
             raise NotImplementedError(f"cannot escape {replacement=!r}")
+        if flags != 0:
+            raise NotImplementedError("does not support Python re.flags")
+        if count != 0:
+            raise NotImplementedError("does not support count. ")
 
         regex = cls.GROUP.sub(r"(?<\g<name>>\g<pattern>)", regex)
         regex = cls.BACKREF.sub(r"\\\\k<\g<name>>", regex)
         replacement = cls.REPLREF.sub(r"\(.\g<name>)", replacement)
-        return f'gsub("{regex!s}"; "{replacement!s}")'
+        replacement = cls.MAP_CALL.sub(cls.replace_map_call, replacement)
+
+        if not rule.map_calls:
+            return f'gsub("{regex!s}"; "{replacement!s}")'
+        else:
+            map_decl = list()
+            for map_call in rule.map_calls:
+                map_name, *_ = map_call
+                mapping = json.dumps(cls.normalize_mapping(rule.maps[map_name]))
+                map_decl.append(f"{mapping!s} as ${map_name!s}")
+            map_decl = " | ".join(map_decl)
+            return f'{map_decl!s} | gsub("{regex!s}"; "{replacement!s}")'

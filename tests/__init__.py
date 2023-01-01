@@ -104,7 +104,7 @@ class TestJQConversion(unittest.TestCase):
         output = program.input("#arp#").first()
         self.assertEqual(output, "#orp#")
 
-    def test_back_references(self):
+    def test_back_references_no1(self):
         rule = Rule(source=r"(?P<vowel>(a|e))(?P<consonant>(k|p))(?P=vowel)", target="o{+consonant}o{-_}")
         text = rule.to_jq()
         self.assertEqual(text, (
@@ -120,6 +120,84 @@ class TestJQConversion(unittest.TestCase):
             with self.subTest(key=key):
                 output = program.input(key).first()
                 self.assertEqual(output, expected)
+
+    def test_back_references_no2(self):
+        rule = Rule(source=r"(?P<vowel>(a|e))", target="{-_}o{+consonant}{-vowel}o{-consonant}", suffix=r"(?P<consonant>(k|p))(?P=vowel)")
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            'gsub("(?<prefix>)(?<vowel>(a|e))(?<consonant>(k|p))\\\\k<vowel>"; "\\(.prefix)o\\(.consonant)o")'
+        ))
+        program = jq.compile(text)
+        expect_map = dict(
+            akap="okop",
+            ekep="okop",
+            akep="akep",
+        )
+        for key, expected in expect_map.items():
+            with self.subTest(key=key):
+                output = program.input(key).first()
+                self.assertEqual(output, expected)
+
+    def test_mappings_no1(self):
+        rule = Rule(source=r"(p|t|k)", target="{-_}{voiced[source]}", prefix=r"^", maps=dict(voiced=dict(p="b", t="d", k="g")))
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            '{"p": "b", "t": "d", "k": "g"} as $voiced | gsub("(?<prefix>^)(?<source>(p|t|k))(?<suffix>)"; "\\(.prefix)\\($voiced[.source])\\(.suffix)")'
+        ))
+        program = jq.compile(text)
+        expect_map = dict(
+            pat="bat",
+            kat="gat",
+        )
+        for key, expected in expect_map.items():
+            with self.subTest(key=key):
+                output = program.input(key).first()
+                self.assertEqual(output, expected)
+
+    def test_mappings_no2(self):
+        rule = Rule(source=r"(?P<sonorant>(r|l))", target="{-_}{dissimilate[sonorant]}", suffix=r"(?P<vowel>(a|e))(?P=sonorant)", maps=dict(dissimilate=dict(r="l", l="r")))
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            '{"r": "l", "l": "r"} as $dissimilate | gsub("(?<prefix>)(?<sonorant>(r|l))(?<vowel>(a|e))\\\\k<sonorant>"; "\\(.prefix)\\($dissimilate[.sonorant])\\(.vowel)\\(.sonorant)")'
+        ))
+        program = jq.compile(text)
+        expect_map = dict(
+            klali="krali",
+            kreri="kleri",
+        )
+        for key, expected in expect_map.items():
+            with self.subTest(key=key):
+                output = program.input(key).first()
+                self.assertEqual(output, expected)
+
+    def test_mappings_no3(self):
+        harmony = {
+                ("a", "a"): "a",
+                ("a", "e"): "a",
+                ("a", "u"): "ɯ",
+                ("e", "a"): "e",
+                ("e", "e"): "e",
+                ("e", "u"): "i",
+                ("u", "a"): "a",
+                ("u", "e"): "a",
+                ("u", "u"): "u",
+        }
+        rule = Rule(source=r"(a|e|u)", target="{-_}{harmony[vowel,source]}", prefix=r"(?P<vowel>(a|e|u))(?P<consonant>(k|p))", maps=dict(harmony=harmony))
+        text = rule.to_jq()
+        self.assertEqual(text, (
+            '{"a": {"a": "a", "e": "a", "u": "\\u026f"}, "e": {"a": "e", "e": "e", "u": "i"}, "u": {"a": "a", "e": "a", "u": "u"}} as $harmony | gsub("(?<vowel>(a|e|u))(?<consonant>(k|p))(?<source>(a|e|u))(?<suffix>)"; "\\(.vowel)\\(.consonant)\\($harmony[.vowel][.source])\\(.suffix)")'
+        ))
+        program = jq.compile(text)
+        expect_map = dict(
+            klepa="klepe",
+            krepu="krepi",
+            krapu="krapɯ",
+        )
+        for key, expected in expect_map.items():
+            with self.subTest(key=key):
+                output = program.input(key).first()
+                self.assertEqual(output, expected)
+
 
 
 if __name__ == '__main__':
