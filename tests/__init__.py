@@ -139,15 +139,16 @@ class TestJQConversion(unittest.TestCase):
                 self.assertEqual(output, expected)
 
     def test_mappings_no1(self):
-        rule = Rule(source=r"(p|t|k)", target="{-_}{voiced[source]}", prefix=r"^", maps=dict(voiced=dict(p="b", t="d", k="g")))
+        rule = Rule(source=r"(p|t|kh|k)", target="{-_}{voiced[source]}", prefix=r"^", maps=dict(voiced=dict(p="b", t="d", k="g", kh="gɦ")))
         text = rule.to_jq()
         self.assertEqual(text, (
-            '{"p": "b", "t": "d", "k": "g"} as $voiced | gsub("(?<prefix>^)(?<source>(p|t|k))(?<suffix>)"; "\\(.prefix)\\($voiced[.source])\\(.suffix)")'
+            '{"p": "b", "t": "d", "k": "g", "kh": "g\\u0266"} as $voiced | gsub("(?<prefix>^)(?<source>(p|t|kh|k))(?<suffix>)"; "\\(.prefix)\\($voiced[.source])\\(.suffix)")'
         ))
         program = jq.compile(text)
         expect_map = dict(
             pat="bat",
             kat="gat",
+            khat="gɦat",
         )
         for key, expected in expect_map.items():
             with self.subTest(key=key):

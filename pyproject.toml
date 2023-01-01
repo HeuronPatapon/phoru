@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "phoru-HeuronPatapon"
-version = "1.0.0"
+version = "1.0.1"
 description = "Phonological rule processing."
 authors = ["Heuron <heuron-patapon@laposte.net>"]
 packages = [

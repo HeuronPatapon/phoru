@@ -237,17 +237,17 @@ class Rule:
     ~~~~~~~~
     Transform a voiceless consonant at the beginning of a word into a voiced version:
 
-        >>> r = Rule(source=r"(p|t|k)", target="{-_}{voiced[source]}", prefix=r"^", maps=dict(voiced=dict(p="b", t="d", k="g")))
+        >>> r = Rule(source=r"(p|t|kh|k)", target="{-_}{voiced[source]}", prefix=r"^", maps=dict(voiced=dict(p="b", t="d", k="g", kh="gɦ")))
         >>> r.pattern
-        re.compile('(?P<prefix>^)(?P<source>(p|t|k))(?P<suffix>)')
+        re.compile('(?P<prefix>^)(?P<source>(p|t|kh|k))(?P<suffix>)')
         >>> r.replacement
         '\\\\g<prefix>{voiced[source]}\\\\g<suffix>'
         >>> r.map_calls
         {('voiced', 'source')}
         >>> repr(r)
-        "<Rule (p|t|k) := {-_}{voiced[source]} | ^ _  & voiced={'p': 'b', 't': 'd', 'k': 'g'}>"
-        >>> r("pat"), r("kat")
-        ('bat', 'gat')
+        "<Rule (p|t|kh|k) := {-_}{voiced[source]} | ^ _  & voiced={'p': 'b', 't': 'd', 'k': 'g', 'kh': 'gɦ'}>"
+        >>> r("pat"), r("kat"), r("khat")
+        ('bat', 'gat', 'gɦat')
 
     Dissimilate a sonorant: 
 
@@ -640,11 +640,14 @@ class _to_jq:
         """
         result = dict()
         for key, value in mapping.items():
-            *subkeys, last_key = key
-            subdict = result
-            for subkey in subkeys:
-                subdict = subdict.setdefault(subkey, dict())
-            subdict[last_key] = value
+            if isinstance(key, str):
+                result[key] = value
+            else:
+                *subkeys, last_key = key
+                subdict = result
+                for subkey in subkeys:
+                    subdict = subdict.setdefault(subkey, dict())
+                subdict[last_key] = value
 
         return result
 
