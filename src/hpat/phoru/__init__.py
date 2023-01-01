@@ -1,4 +1,5 @@
 from . import phorulib
+from .phorulib import Rule
 
 
 def load_tests(loader, tests, ignore):
